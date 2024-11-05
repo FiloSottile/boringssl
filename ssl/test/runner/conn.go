@@ -389,12 +389,6 @@ func roundUp(a, b int) int {
 	return a + (b-a%b)%b
 }
 
-// cbcMode is an interface for block ciphers using cipher block chaining.
-type cbcMode interface {
-	cipher.BlockMode
-	SetIV([]byte)
-}
-
 // decrypt checks and strips the mac and decrypts the data in b. Returns a
 // success boolean, the number of bytes to skip from the start of the record in
 // order to get the application payload, the encrypted record type (or 0
@@ -452,7 +446,7 @@ func (hc *halfConn) decrypt(b *block) (ok bool, prefixLen int, contentType recor
 				return false, 0, 0, alertBadRecordMAC
 			}
 			b.resize(recordHeaderLen + explicitIVLen + len(payload))
-		case cbcMode:
+		case *cbcMode:
 			blockSize := c.BlockSize()
 			if hc.version >= VersionTLS11 || hc.isDTLS {
 				explicitIVLen = blockSize
@@ -614,7 +608,7 @@ func (hc *halfConn) encrypt(b *block, explicitIVLen int, typ recordType) (bool, 
 			}
 
 			c.Seal(payload[:0], nonce, payload, additionalData)
-		case cbcMode:
+		case *cbcMode:
 			blockSize := c.BlockSize()
 			if explicitIVLen > 0 {
 				c.SetIV(payload[:explicitIVLen])
@@ -1209,10 +1203,8 @@ func (c *Conn) doWriteRecord(typ recordType, data []byte) (n int, err error) {
 		explicitIVIsSeq := false
 		first = false
 
-		var cbc cbcMode
 		if c.out.version >= VersionTLS11 {
-			var ok bool
-			if cbc, ok = c.out.cipher.(cbcMode); ok {
+			if cbc, ok := c.out.cipher.(*cbcMode); ok {
 				explicitIVLen = cbc.BlockSize()
 			}
 		}
@@ -1553,7 +1545,7 @@ func (c *Conn) Write(b []byte) (int, error) {
 
 	var m int
 	if len(b) > 1 && c.vers <= VersionTLS10 && !c.isDTLS {
-		if _, ok := c.out.cipher.(cipher.BlockMode); ok {
+		if _, ok := c.out.cipher.(*cbcMode); ok {
 			n, err := c.writeRecord(recordTypeApplicationData, b[:1])
 			if err != nil {
 				return n, c.out.setErrorLocked(err)

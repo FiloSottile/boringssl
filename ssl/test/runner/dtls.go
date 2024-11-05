@@ -342,7 +342,7 @@ func (c *Conn) dtlsPackRecord(typ recordType, data []byte, mustPack bool) (n int
 	explicitIVLen := 0
 	explicitIVIsSeq := false
 
-	if cbc, ok := c.out.cipher.(cbcMode); ok {
+	if cbc, ok := c.out.cipher.(*cbcMode); ok {
 		// Block cipher modes have an explicit IV.
 		explicitIVLen = cbc.BlockSize()
 	} else if aead, ok := c.out.cipher.(*tlsAead); ok {
